@@ -173,11 +173,52 @@
     });
     nav.addEventListener('click', function (e) { if (e.target.closest('a')) { nav.classList.remove('open'); menuBtn.setAttribute('aria-expanded', 'false'); } });
   }
+  // header: a Liquid Glass dock. Scrolling down tucks it into a round bubble with the leaf at the
+  // right edge, like the app's folding Today header; scrolling up, or tapping the bubble, opens it.
   var top = d.querySelector('.top');
-  if (top) {
-    var onS = function () { top.classList.toggle('scrolled', window.scrollY > 8); };
-    window.addEventListener('scroll', onS, { passive: true }); onS();
-  }
+  if (top) (function () {
+    var wrap = top.querySelector('.wrap');
+    var dot = d.createElement('button');
+    dot.className = 'dock-dot'; dot.type = 'button';
+    dot.setAttribute('aria-label', 'Open the menu'); dot.setAttribute('aria-expanded', 'false');
+    dot.innerHTML = '<svg viewBox="15 15 70 70" aria-hidden="true"><path fill-rule="evenodd" d="' + LEAF + '"/></svg>';
+    wrap.appendChild(dot);
+    var parts = function () { return [].filter.call(wrap.children, function (c) { return c !== dot; }); };
+    function measure() {
+      if (top.classList.contains('collapsed')) return;
+      var pad = parseFloat(getComputedStyle(top).paddingLeft) || 0;
+      wrap.style.setProperty('--pw', Math.min(1120, Math.round(top.clientWidth - pad * 2)) + 'px');
+      top.classList.add('ready');
+    }
+    function setCollapsed(c) {
+      if (c === top.classList.contains('collapsed')) return;
+      top.classList.toggle('collapsed', c);
+      dot.setAttribute('aria-expanded', String(!c));
+      parts().forEach(function (p) { if (c) p.setAttribute('inert', ''); else p.removeAttribute('inert'); });
+    }
+    var lastY = window.scrollY, hold = 0, ticking = false;
+    function onScroll() {
+      ticking = false;
+      var y = window.scrollY, dy = y - lastY;
+      var menuOpen = nav && nav.classList.contains('open');
+      if (y < 70) setCollapsed(false);
+      else if (dy > 6 && y > 180 && !menuOpen && Date.now() > hold) setCollapsed(true);
+      else if (dy < -6) setCollapsed(false);
+      if (Math.abs(dy) > 6) lastY = y;
+    }
+    window.addEventListener('scroll', function () { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
+    dot.addEventListener('click', function () { hold = Date.now() + 2500; lastY = window.scrollY; setCollapsed(false); });
+    top.addEventListener('focusin', function () { setCollapsed(false); });
+    if (window.matchMedia('(pointer: fine)').matches) wrap.addEventListener('pointermove', function (e) {
+      var r = wrap.getBoundingClientRect();
+      wrap.style.setProperty('--hx', (e.clientX - r.left) + 'px');
+      wrap.style.setProperty('--hy', (e.clientY - r.top) + 'px');
+    });
+    measure();
+    window.addEventListener('resize', measure);
+    if (d.fonts && d.fonts.ready) d.fonts.ready.then(measure);
+    window.addEventListener('load', measure);
+  })();
   // reveal on scroll
   if ('IntersectionObserver' in window && !RM.matches) {
     var io = new IntersectionObserver(function (es) {
